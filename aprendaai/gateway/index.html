@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aprenda.AI</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #eff6ff 0%, #ecfdf5 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .container { text-align: center; padding: 2rem; max-width: 380px; width: 100%; }
+    h1 { color: #2563eb; font-size: 2rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #6b7280; margin-bottom: 1.5rem; font-size: 0.95rem; }
+    .form-group { margin-bottom: 1rem; text-align: left; }
+    label { display: block; color: #374151; font-weight: 500; margin-bottom: 0.25rem; font-size: 0.9rem; }
+    input {
+      width: 100%; padding: 0.7rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.5rem;
+      font-size: 1rem; outline: none; transition: border 0.2s;
+    }
+    input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    button {
+      width: 100%; padding: 0.75rem; background: #2563eb; color: white; border: none;
+      border-radius: 0.5rem; font-size: 1rem; font-weight: 600; cursor: pointer;
+      margin-top: 0.5rem;
+    }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #93c5fd; cursor: not-allowed; }
+    .error { color: #dc2626; font-size: 0.85rem; margin-top: 0.5rem; display: none; text-align: center; }
+    .spinner {
+      width: 18px; height: 18px; border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite;
+      display: inline-block; vertical-align: middle; margin-right: 0.5rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Aprenda.AI</h1>
+    <p class="subtitle">Plataforma de aprendizado da familia</p>
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="username">Usuario</label>
+        <input type="text" id="username" autocomplete="username" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Senha</label>
+        <input type="password" id="password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" id="submitBtn">Entrar</button>
+      <p class="error" id="error">Usuario ou senha incorretos</p>
+    </form>
+  </div>
+  <script>
+    var TUNNEL_URL = "https://educacao-tdah-webapp-tunnel-d26qymqg.devinapps.com";
+    var TUNNEL_USER = "user";
+    var TUNNEL_PASS = "00d39751dc715ba460598ddfd51670a9";
+    var FAMILY_USER = "familiabrandao";
+    var FAMILY_PASS = "12345";
+
+    document.getElementById("loginForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      var u = document.getElementById("username").value.trim();
+      var p = document.getElementById("password").value;
+      
+      if (u === FAMILY_USER && p === FAMILY_PASS) {
+        document.getElementById("error").style.display = "none";
+        document.getElementById("submitBtn").disabled = true;
+        document.getElementById("submitBtn").innerHTML = '<span class="spinner"></span>Entrando...';
+        
+        // Encode tunnel auth as base64 for localStorage
+        var ta = btoa(TUNNEL_USER + ":" + TUNNEL_PASS);
+        
+        // Redirect to tunnel URL with embedded credentials + hash params
+        // The frontend index.html will read the hash, save to localStorage, and redirect to clean URL
+        var redirectUrl = "https://" + TUNNEL_USER + ":" + TUNNEL_PASS + "@" + 
+          TUNNEL_URL.replace("https://", "") + "/#_ta=" + encodeURIComponent(ta);
+        
+        window.location.href = redirectUrl;
+      } else {
+        document.getElementById("error").style.display = "block";
+      }
+    });
+  </script>
+</body>
+</html>

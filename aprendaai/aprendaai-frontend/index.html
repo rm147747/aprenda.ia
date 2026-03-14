@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>aprendaai-frontend</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Check if we arrived with tunnel auth in the hash (from gateway redirect)
+      (function() {
+        var h = location.hash;
+        if (h && h.indexOf('_ta=') > -1) {
+          var params = new URLSearchParams(h.substring(1));
+          var ta = params.get('_ta');
+          var ft = params.get('ft');
+          if (ta) localStorage.setItem('_ta', ta);
+          if (ft) localStorage.setItem('family_token', ft);
+          // Redirect to clean URL (no hash, no embedded credentials)
+          location.replace(location.protocol + '//' + location.host + location.pathname);
+          return;
+        }
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
