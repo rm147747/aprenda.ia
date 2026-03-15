@@ -114,6 +114,19 @@ def extract_from_image(file_path: str) -> str:
     return response.choices[0].message.content or ""
 
 
+def transcribe_audio(file_path: str) -> str:
+    """Transcribe audio using OpenAI Whisper API."""
+    client = OpenAI(api_key=OPENAI_API_KEY)
+
+    with open(file_path, "rb") as f:
+        transcription = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=f,
+        )
+
+    return transcription.text or ""
+
+
 def extract_content(file_path: str, input_type: str) -> str:
     """Extract text content from any supported file type."""
     if input_type == "pdf":
@@ -122,5 +135,7 @@ def extract_content(file_path: str, input_type: str) -> str:
         return extract_from_docx(file_path)
     elif input_type in ("image", "jpg", "jpeg", "png"):
         return extract_from_image(file_path)
+    elif input_type == "audio":
+        return transcribe_audio(file_path)
     else:
         return ""

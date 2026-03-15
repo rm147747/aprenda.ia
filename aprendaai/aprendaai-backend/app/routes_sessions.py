@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, UploadFile, HTTPException
 from pydantic import BaseModel
 
-from app.config import UPLOAD_DIR, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
+from app.config import UPLOAD_DIR, ALLOWED_EXTENSIONS, MAX_FILE_SIZE, AUDIO_EXTENSIONS
 from app.database import get_db
 from app.extraction import extract_content
 from app.ai_service import generate_lesson, generate_review, generate_parent_summary
@@ -82,6 +82,8 @@ async def create_session(
             current_type = "docx"
         elif ext in (".jpg", ".jpeg", ".png"):
             current_type = "image"
+        elif ext in AUDIO_EXTENSIONS:
+            current_type = "audio"
         else:
             current_type = "text"
 

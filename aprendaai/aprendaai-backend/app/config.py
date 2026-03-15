@@ -22,11 +22,17 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = 60
 
 # Allowed file types
-ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png"}
+ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".mp3", ".wav", ".webm", ".ogg", ".m4a"}
 ALLOWED_MIME_TYPES = {
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "image/jpeg",
     "image/png",
+    "audio/mpeg",
+    "audio/wav",
+    "audio/webm",
+    "audio/ogg",
+    "audio/mp4",
 }
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".webm", ".ogg", ".m4a"}

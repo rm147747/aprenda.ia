@@ -3,8 +3,9 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, FileText, Image, ArrowLeft, Sparkles, X } from "lucide-react";
+import { Upload, FileText, Image, ArrowLeft, Sparkles, X, Mic } from "lucide-react";
 import { api } from "@/api/client";
+import AudioRecorder from "@/components/AudioRecorder";
 import type { Child } from "@/types";
 
 const MAX_FILES = 10;
@@ -80,11 +81,22 @@ export default function TopicInput() {
     }
   };
 
+  const handleAudioRecorded = (audioFile: File) => {
+    if (files.length >= MAX_FILES) {
+      setError(`Maximo de ${MAX_FILES} arquivos`);
+      return;
+    }
+    setFiles((prev) => [...prev, audioFile]);
+    setError("");
+  };
+
   const fileIcon = (file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (ext === "pdf") return <FileText className="w-5 h-5 text-red-400" />;
     if (["jpg", "jpeg", "png"].includes(ext || ""))
       return <Image className="w-5 h-5 text-green-400" />;
+    if (["webm", "mp3", "wav", "ogg", "m4a"].includes(ext || ""))
+      return <Mic className="w-5 h-5 text-purple-400" />;
     return <FileText className="w-5 h-5 text-blue-400" />;
   };
 
@@ -122,6 +134,20 @@ export default function TopicInput() {
               className="text-lg py-6"
               disabled={loading}
             />
+          </CardContent>
+        </Card>
+
+        <Card className="mb-4">
+          <CardContent className="pt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Ou grave um audio (opcional)
+            </label>
+            <div className="flex items-center gap-3 p-4 bg-purple-50 rounded-lg">
+              <AudioRecorder onRecorded={handleAudioRecorded} disabled={loading} />
+              <span className="text-xs text-gray-400">
+                Fale o tema e o audio sera transcrito automaticamente
+              </span>
+            </div>
           </CardContent>
         </Card>
 
