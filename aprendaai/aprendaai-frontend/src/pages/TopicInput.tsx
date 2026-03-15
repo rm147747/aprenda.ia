@@ -7,7 +7,7 @@ import { Upload, FileText, Image, ArrowLeft, Sparkles, X } from "lucide-react";
 import { api } from "@/api/client";
 import type { Child } from "@/types";
 
-const MAX_FILES = 5;
+const MAX_FILES = 10;
 
 export default function TopicInput() {
   const [searchParams] = useSearchParams();
