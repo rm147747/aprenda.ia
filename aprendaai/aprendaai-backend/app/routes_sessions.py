@@ -123,9 +123,10 @@ async def create_session(
         session_id = cursor.lastrowid
         conn.commit()
 
-    # Generate lesson
+    # Generate lesson — use low temperature when material was provided
+    has_material = len(file_paths) > 0
     try:
-        lesson = generate_lesson(child["name"], child["age"], extracted_text)
+        lesson = generate_lesson(child["name"], child["age"], extracted_text, has_material=has_material)
         lesson_json = json.dumps(lesson, ensure_ascii=False)
 
         with get_db() as conn:
@@ -334,7 +335,7 @@ async def generate_session_review(session_id: int, req: ReviewRequest):
     """Generate adaptive review for wrong answers."""
     with get_db() as conn:
         session = conn.execute(
-            """SELECT s.id, s.extracted_text, s.lesson_json,
+            """SELECT s.id, s.extracted_text, s.lesson_json, s.original_file,
                       c.name as child_name, c.age as child_age
                FROM sessions s JOIN children c ON s.child_id = c.id
                WHERE s.id = ?""",
@@ -353,11 +354,13 @@ async def generate_session_review(session_id: int, req: ReviewRequest):
             q = quiz[idx]
             wrong_questions += f"- Pergunta: {q['question']}, Resposta correta: {q['options'][q['correct']]}\n"
 
+    has_material = bool(session["original_file"])
     review = generate_review(
         child_name=session["child_name"],
         child_age=session["child_age"],
         wrong_questions=wrong_questions,
         original_content=session["extracted_text"] or "",
+        has_material=has_material,
     )
 
     return {
