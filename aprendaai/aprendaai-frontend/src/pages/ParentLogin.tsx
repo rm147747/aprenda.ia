@@ -7,24 +7,25 @@ import { ArrowLeft, Lock } from "lucide-react";
 import { api } from "@/api/client";
 
 export default function ParentLogin() {
-  const [pin, setPin] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async () => {
-    if (pin.length < 4) {
-      setError("Digite o PIN de 4 digitos");
+    if (!username || !password) {
+      setError("Digite o usuario e a senha");
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const res = await api.parentLogin(pin);
+      const res = await api.parentLogin(username, password);
       localStorage.setItem("parent_token", res.token);
       navigate("/parents/dashboard");
     } catch {
-      setError("PIN incorreto");
+      setError("Usuario ou senha incorretos");
       setLoading(false);
     }
   };
@@ -46,20 +47,26 @@ export default function ParentLogin() {
             <div className="text-center mb-6">
               <Lock className="w-10 h-10 text-blue-400 mx-auto mb-3" />
               <h1 className="text-xl font-bold text-gray-800">Area dos Pais</h1>
-              <p className="text-sm text-gray-500 mt-1">Digite o PIN para acessar</p>
+              <p className="text-sm text-gray-500 mt-1">Digite seu usuario e senha</p>
             </div>
 
             <Input
-              type="password"
-              placeholder="PIN de 4 digitos"
-              maxLength={4}
-              value={pin}
-              onChange={(e) => {
-                const v = e.target.value.replace(/\D/g, "").slice(0, 4);
-                setPin(v);
-              }}
+              type="text"
+              placeholder="Usuario"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-              className="text-center text-2xl tracking-widest py-6 mb-4"
+              className="mb-3"
+              disabled={loading}
+            />
+
+            <Input
+              type="password"
+              placeholder="Senha"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+              className="mb-4"
               disabled={loading}
             />
 
@@ -70,13 +77,13 @@ export default function ParentLogin() {
             <Button
               className="w-full py-5 bg-blue-500 hover:bg-blue-600"
               onClick={handleLogin}
-              disabled={loading || pin.length < 4}
+              disabled={loading || !username || !password}
             >
               {loading ? "Entrando..." : "Entrar"}
             </Button>
 
             <p className="text-xs text-gray-400 text-center mt-4">
-              PIN padrao: 1234
+              Usuario e senha padrao: 123
             </p>
           </CardContent>
         </Card>

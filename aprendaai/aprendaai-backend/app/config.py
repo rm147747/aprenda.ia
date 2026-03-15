@@ -16,7 +16,8 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 # Auth
-PARENT_PIN_DEFAULT = "1234"
+PARENT_DEFAULT_USERNAME = "123"
+PARENT_DEFAULT_PASSWORD = "123"
 JWT_SECRET = os.getenv("JWT_SECRET", "aprendaai-secret-key-change-in-prod")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = 60

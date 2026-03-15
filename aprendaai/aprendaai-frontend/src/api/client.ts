@@ -81,11 +81,11 @@ export const api = {
       body: JSON.stringify({ wrong_question_indices: wrongIndices }),
     }),
 
-  parentLogin: (pin: string) =>
+  parentLogin: (username: string, password: string) =>
     request<{ success: boolean; token: string }>("/api/parents/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin }),
+      body: JSON.stringify({ username, password }),
     }),
 
   getDashboard: () =>

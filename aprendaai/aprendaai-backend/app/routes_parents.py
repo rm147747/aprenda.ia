@@ -11,13 +11,14 @@ from app.database import get_db
 router = APIRouter(prefix="/api/parents", tags=["parents"])
 
 
-class PinLogin(BaseModel):
-    pin: str
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 
-class PinChange(BaseModel):
-    old_pin: str
-    new_pin: str
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
 
 
 def verify_token(request: Request):
@@ -32,15 +33,18 @@ def verify_token(request: Request):
 
 
 @router.post("/login")
-async def parent_login(req: PinLogin):
+async def parent_login(req: LoginRequest):
     with get_db() as conn:
-        settings = conn.execute("SELECT parent_pin_hash FROM settings LIMIT 1").fetchone()
+        settings = conn.execute("SELECT parent_username, parent_password_hash FROM settings LIMIT 1").fetchone()
 
     if not settings:
         raise HTTPException(status_code=500, detail="Settings not configured")
 
-    if not bcrypt.checkpw(req.pin.encode(), settings["parent_pin_hash"].encode()):
-        raise HTTPException(status_code=403, detail="PIN incorreto")
+    if req.username != settings["parent_username"]:
+        raise HTTPException(status_code=403, detail="Usuario ou senha incorretos")
+
+    if not bcrypt.checkpw(req.password.encode(), settings["parent_password_hash"].encode()):
+        raise HTTPException(status_code=403, detail="Usuario ou senha incorretos")
 
     expire = datetime.datetime.utcnow() + datetime.timedelta(minutes=JWT_EXPIRE_MINUTES)
     token = jwt.encode({"role": "parent", "exp": expire}, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -227,18 +231,18 @@ async def session_detail(session_id: int, _=Depends(verify_token)):
     }
 
 
-@router.post("/change-pin")
-async def change_pin(req: PinChange, _=Depends(verify_token)):
+@router.post("/change-password")
+async def change_password(req: ChangePasswordRequest, _=Depends(verify_token)):
     with get_db() as conn:
-        settings = conn.execute("SELECT parent_pin_hash FROM settings LIMIT 1").fetchone()
+        settings = conn.execute("SELECT parent_password_hash FROM settings LIMIT 1").fetchone()
 
-    if not settings or not bcrypt.checkpw(req.old_pin.encode(), settings["parent_pin_hash"].encode()):
-        raise HTTPException(status_code=401, detail="PIN atual incorreto")
+    if not settings or not bcrypt.checkpw(req.old_password.encode(), settings["parent_password_hash"].encode()):
+        raise HTTPException(status_code=401, detail="Senha atual incorreta")
 
-    new_hash = bcrypt.hashpw(req.new_pin.encode(), bcrypt.gensalt()).decode()
+    new_hash = bcrypt.hashpw(req.new_password.encode(), bcrypt.gensalt()).decode()
     with get_db() as conn:
         conn.execute(
-            "UPDATE settings SET parent_pin_hash = ?, updated_at = CURRENT_TIMESTAMP",
+            "UPDATE settings SET parent_password_hash = ?, updated_at = CURRENT_TIMESTAMP",
             (new_hash,),
         )
         conn.commit()
