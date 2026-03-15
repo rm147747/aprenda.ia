@@ -26,16 +26,6 @@ function authHeaders(): Record<string, string> {
 }
 
 export const api = {
-  familyLogin: (username: string, password: string) =>
-    request<{ success: boolean; token: string }>("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    }),
-
-  verifyToken: (token: string) =>
-    request<{ valid: boolean; role: string }>(`/api/auth/verify?token=${token}`),
-
   getChildren: () =>
     request<{ children: import("../types").Child[] }>("/api/children"),
 
