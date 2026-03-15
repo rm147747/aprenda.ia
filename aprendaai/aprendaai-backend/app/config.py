@@ -16,17 +16,24 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 # Auth
-PARENT_PIN_DEFAULT = "1234"
+PARENT_DEFAULT_USERNAME = "123"
+PARENT_DEFAULT_PASSWORD = "123"
 JWT_SECRET = os.getenv("JWT_SECRET", "aprendaai-secret-key-change-in-prod")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = 60
 
 # Allowed file types
-ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png"}
+ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".mp3", ".wav", ".webm", ".ogg", ".m4a"}
 ALLOWED_MIME_TYPES = {
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "image/jpeg",
     "image/png",
+    "audio/mpeg",
+    "audio/wav",
+    "audio/webm",
+    "audio/ogg",
+    "audio/mp4",
 }
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".webm", ".ogg", ".m4a"}

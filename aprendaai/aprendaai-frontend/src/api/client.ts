@@ -26,27 +26,21 @@ function authHeaders(): Record<string, string> {
 }
 
 export const api = {
-  familyLogin: (username: string, password: string) =>
-    request<{ success: boolean; token: string }>("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    }),
-
-  verifyToken: (token: string) =>
-    request<{ valid: boolean; role: string }>(`/api/auth/verify?token=${token}`),
-
   getChildren: () =>
     request<{ children: import("../types").Child[] }>("/api/children"),
 
   getChild: (id: number) =>
     request<import("../types").Child>(`/api/children/${id}`),
 
-  createSession: (childId: number, topic: string, file?: File) => {
+  createSession: (childId: number, topic: string, files?: File[]) => {
     const form = new FormData();
     form.append("child_id", String(childId));
     form.append("topic", topic);
-    if (file) form.append("file", file);
+    if (files) {
+      for (const f of files) {
+        form.append("files", f);
+      }
+    }
     return request<{ session_id: number; status: string }>("/api/sessions", {
       method: "POST",
       body: form,
@@ -87,11 +81,11 @@ export const api = {
       body: JSON.stringify({ wrong_question_indices: wrongIndices }),
     }),
 
-  parentLogin: (pin: string) =>
+  parentLogin: (username: string, password: string) =>
     request<{ success: boolean; token: string }>("/api/parents/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin }),
+      body: JSON.stringify({ username, password }),
     }),
 
   getDashboard: () =>

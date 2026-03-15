@@ -64,7 +64,8 @@ def init_db():
 
         CREATE TABLE IF NOT EXISTS settings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            parent_pin_hash TEXT NOT NULL,
+            parent_username TEXT NOT NULL,
+            parent_password_hash TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP
         );
@@ -86,10 +87,11 @@ def init_db():
     cursor.execute("SELECT COUNT(*) FROM settings")
     if cursor.fetchone()[0] == 0:
         import bcrypt
-        pin_hash = bcrypt.hashpw(b"1234", bcrypt.gensalt()).decode()
+        from app.config import PARENT_DEFAULT_USERNAME, PARENT_DEFAULT_PASSWORD
+        password_hash = bcrypt.hashpw(PARENT_DEFAULT_PASSWORD.encode(), bcrypt.gensalt()).decode()
         cursor.execute(
-            "INSERT INTO settings (parent_pin_hash) VALUES (?)",
-            (pin_hash,),
+            "INSERT INTO settings (parent_username, parent_password_hash) VALUES (?, ?)",
+            (PARENT_DEFAULT_USERNAME, password_hash),
         )
 
     conn.commit()
