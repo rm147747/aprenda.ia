@@ -88,11 +88,11 @@ async def create_session(
             if not topic:
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Could not extract content from file: {str(e)}",
+                    detail=f"Erro ao extrair conteudo do arquivo: {str(e)}",
                 )
 
     if not extracted_text or not extracted_text.strip():
-        raise HTTPException(status_code=400, detail="No content could be extracted")
+        raise HTTPException(status_code=400, detail="Nao foi possivel extrair conteudo do arquivo. Tente outro arquivo ou digite o tema manualmente.")
 
     # Create session in DB
     with get_db() as conn:
