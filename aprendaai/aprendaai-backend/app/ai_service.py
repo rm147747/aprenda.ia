@@ -46,7 +46,7 @@ def generate_lesson(child_name: str, child_age: int, content: str) -> dict:
             {"role": "system", "content": LESSON_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=0.7,
+        temperature=0.3,
         max_tokens=3000,
         response_format={"type": "json_object"},
     )
@@ -82,7 +82,7 @@ def generate_review(
             {"role": "system", "content": REVIEW_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=0.7,
+        temperature=0.3,
         max_tokens=2000,
         response_format={"type": "json_object"},
     )
