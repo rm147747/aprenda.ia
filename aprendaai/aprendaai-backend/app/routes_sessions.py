@@ -31,11 +31,11 @@ class ReviewRequest(BaseModel):
 async def create_session(
     child_id: int = Form(...),
     topic: str = Form(""),
-    file: UploadFile | None = File(None),
+    files: list[UploadFile] = File([]),
 ):
-    """Create a new study session. Accepts topic text and/or file upload."""
-    if not topic and not file:
-        raise HTTPException(status_code=400, detail="Provide a topic or upload a file")
+    """Create a new study session. Accepts topic text and/or multiple file uploads."""
+    if not topic and not files:
+        raise HTTPException(status_code=400, detail="Envie um tema ou um arquivo")
 
     # Get child info
     with get_db() as conn:
@@ -46,46 +46,60 @@ async def create_session(
             raise HTTPException(status_code=404, detail="Child not found")
 
     input_type = "text"
-    file_path = None
+    file_paths = []
     extracted_text = topic
 
-    # Handle file upload
-    if file and file.filename:
+    # Handle file uploads (multiple files)
+    for idx, file in enumerate(files):
+        if not file.filename:
+            continue
+
         ext = Path(file.filename).suffix.lower()
         if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
-                detail=f"File type {ext} not supported. Use PDF, DOCX, JPG, or PNG.",
+                detail=f"Tipo de arquivo {ext} nao suportado. Use PDF, DOCX, JPG ou PNG.",
             )
 
         # Save file
         timestamp = int(time.time())
-        safe_name = f"{timestamp}_{child_id}{ext}"
-        file_path = str(UPLOAD_DIR / safe_name)
+        safe_name = f"{timestamp}_{child_id}_{idx}{ext}"
+        current_file_path = str(UPLOAD_DIR / safe_name)
 
         content = await file.read()
         if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+            raise HTTPException(status_code=400, detail="Arquivo muito grande (maximo 10MB)")
 
-        with open(file_path, "wb") as f:
+        with open(current_file_path, "wb") as f:
             f.write(content)
 
-        # Determine input type
+        file_paths.append(current_file_path)
+
+        # Determine input type for this file
         if ext == ".pdf":
-            input_type = "pdf"
+            current_type = "pdf"
         elif ext in (".doc", ".docx"):
-            input_type = "docx"
+            current_type = "docx"
         elif ext in (".jpg", ".jpeg", ".png"):
-            input_type = "image"
+            current_type = "image"
+        else:
+            current_type = "text"
+
+        # Use the first non-image file type as the main input_type
+        if idx == 0 or current_type not in ("image",):
+            input_type = current_type
 
         # Extract text from file
         try:
-            file_text = extract_content(file_path, input_type)
+            file_text = extract_content(current_file_path, current_type)
             if file_text:
-                extracted_text = f"{topic}\n\n{file_text}" if topic else file_text
+                if extracted_text and extracted_text.strip():
+                    extracted_text = f"{extracted_text}\n\n{file_text}"
+                else:
+                    extracted_text = file_text
         except Exception as e:
-            # If extraction fails, use topic as fallback
-            if not topic:
+            # If extraction fails and we have no content yet, raise error
+            if not extracted_text or not extracted_text.strip():
                 raise HTTPException(
                     status_code=500,
                     detail=f"Erro ao extrair conteudo do arquivo: {str(e)}",
@@ -94,12 +108,15 @@ async def create_session(
     if not extracted_text or not extracted_text.strip():
         raise HTTPException(status_code=400, detail="Nao foi possivel extrair conteudo do arquivo. Tente outro arquivo ou digite o tema manualmente.")
 
+    # Store file paths as JSON if multiple files
+    stored_file_path = json.dumps(file_paths) if file_paths else None
+
     # Create session in DB
     with get_db() as conn:
         cursor = conn.execute(
             """INSERT INTO sessions (child_id, topic, input_type, original_file, extracted_text, status)
                VALUES (?, ?, ?, ?, ?, 'processing')""",
-            (child_id, topic or "Uploaded file", input_type, file_path, extracted_text),
+            (child_id, topic or "Arquivo enviado", input_type, stored_file_path, extracted_text),
         )
         session_id = cursor.lastrowid
         conn.commit()

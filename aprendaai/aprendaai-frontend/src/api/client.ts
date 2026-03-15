@@ -42,11 +42,15 @@ export const api = {
   getChild: (id: number) =>
     request<import("../types").Child>(`/api/children/${id}`),
 
-  createSession: (childId: number, topic: string, file?: File) => {
+  createSession: (childId: number, topic: string, files?: File[]) => {
     const form = new FormData();
     form.append("child_id", String(childId));
     form.append("topic", topic);
-    if (file) form.append("file", file);
+    if (files) {
+      for (const f of files) {
+        form.append("files", f);
+      }
+    }
     return request<{ session_id: number; status: string }>("/api/sessions", {
       method: "POST",
       body: form,

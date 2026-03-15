@@ -3,16 +3,18 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, FileText, Image, ArrowLeft, Sparkles } from "lucide-react";
+import { Upload, FileText, Image, ArrowLeft, Sparkles, X } from "lucide-react";
 import { api } from "@/api/client";
 import type { Child } from "@/types";
+
+const MAX_FILES = 5;
 
 export default function TopicInput() {
   const [searchParams] = useSearchParams();
   const childId = Number(searchParams.get("child") || 0);
   const [child, setChild] = useState<Child | null>(null);
   const [topic, setTopic] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -27,27 +29,50 @@ export default function TopicInput() {
   }, [childId, navigate]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) {
-      const maxSize = 10 * 1024 * 1024;
-      if (f.size > maxSize) {
-        setError("Arquivo muito grande (maximo 10MB)");
-        return;
+    const selected = e.target.files;
+    if (!selected) return;
+
+    const maxSize = 10 * 1024 * 1024;
+    const newFiles: File[] = [];
+
+    for (let i = 0; i < selected.length; i++) {
+      if (files.length + newFiles.length >= MAX_FILES) {
+        setError(`Maximo de ${MAX_FILES} arquivos`);
+        break;
       }
-      setFile(f);
+      if (selected[i].size > maxSize) {
+        setError(`${selected[i].name} e muito grande (maximo 10MB)`);
+        continue;
+      }
+      newFiles.push(selected[i]);
+    }
+
+    if (newFiles.length > 0) {
+      setFiles((prev) => [...prev, ...newFiles]);
       setError("");
     }
+
+    // Reset input so the same file can be re-selected
+    e.target.value = "";
+  };
+
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleStart = async () => {
-    if (!topic.trim() && !file) {
+    if (!topic.trim() && files.length === 0) {
       setError("Digite um tema ou envie um arquivo");
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const result = await api.createSession(childId, topic, file || undefined);
+      const result = await api.createSession(
+        childId,
+        topic,
+        files.length > 0 ? files : undefined,
+      );
       navigate(`/lesson/active?session=${result.session_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao criar sessao");
@@ -55,13 +80,12 @@ export default function TopicInput() {
     }
   };
 
-  const fileIcon = () => {
-    if (!file) return <Upload className="w-8 h-8 text-gray-400" />;
+  const fileIcon = (file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase();
-    if (ext === "pdf") return <FileText className="w-8 h-8 text-red-400" />;
+    if (ext === "pdf") return <FileText className="w-5 h-5 text-red-400" />;
     if (["jpg", "jpeg", "png"].includes(ext || ""))
-      return <Image className="w-8 h-8 text-green-400" />;
-    return <FileText className="w-8 h-8 text-blue-400" />;
+      return <Image className="w-5 h-5 text-green-400" />;
+    return <FileText className="w-5 h-5 text-blue-400" />;
   };
 
   if (!child) return null;
@@ -104,40 +128,60 @@ export default function TopicInput() {
         <Card className="mb-6">
           <CardContent className="pt-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Ou envie um arquivo (opcional)
+              Envie arquivos e fotos (opcional)
             </label>
             <div
               className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
               onClick={() => fileRef.current?.click()}
             >
-              {fileIcon()}
-              {file ? (
-                <p className="mt-2 text-sm text-gray-700 font-medium">
-                  {file.name}
-                </p>
-              ) : (
-                <p className="mt-2 text-sm text-gray-500">
-                  Clique para enviar PDF, DOCX, JPG ou PNG
-                </p>
-              )}
+              <Upload className="w-8 h-8 text-gray-400 mx-auto" />
+              <p className="mt-2 text-sm text-gray-500">
+                Clique para enviar PDF, DOCX, JPG ou PNG
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Ate {MAX_FILES} arquivos (fotos, documentos, etc.)
+              </p>
             </div>
             <input
               ref={fileRef}
               type="file"
               className="hidden"
               accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+              multiple
               onChange={handleFileChange}
               disabled={loading}
             />
-            {file && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-2 text-red-400"
-                onClick={() => setFile(null)}
-              >
-                Remover arquivo
-              </Button>
+
+            {files.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {files.map((file, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {fileIcon(file)}
+                      <span className="text-sm text-gray-700 truncate">
+                        {file.name}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => removeFile(idx)}
+                      className="text-red-400 hover:text-red-600 ml-2 flex-shrink-0"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-400"
+                  onClick={() => setFiles([])}
+                >
+                  Remover todos
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -149,7 +193,7 @@ export default function TopicInput() {
         <Button
           className="w-full py-6 text-lg bg-blue-500 hover:bg-blue-600"
           onClick={handleStart}
-          disabled={loading || (!topic.trim() && !file)}
+          disabled={loading || (!topic.trim() && files.length === 0)}
         >
           {loading ? (
             <span className="animate-pulse">Preparando sua aula...</span>
