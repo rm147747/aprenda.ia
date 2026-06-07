@@ -2,19 +2,27 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Lock } from "lucide-react";
+import { Lock, RefreshCw } from "lucide-react";
 import { api } from "@/api/client";
 import type { Child } from "@/types";
 
 export default function Home() {
   const [children, setChildren] = useState<Child[]>([]);
+  const [dueCounts, setDueCounts] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.getChildren().then((data) => {
+    api.getChildren().then(async (data) => {
       setChildren(data.children);
       setLoading(false);
+      // A6: fetch due counts in parallel — non-blocking for the main render
+      const counts = await Promise.all(
+        data.children.map((c) =>
+          api.getDue(c.id, 1).then((d) => [c.id, d.count_due] as const).catch(() => [c.id, 0] as const),
+        ),
+      );
+      setDueCounts(Object.fromEntries(counts));
     });
   }, []);
 
@@ -36,24 +44,38 @@ export default function Home() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl w-full">
-        {children.map((child) => (
-          <Card
-            key={child.id}
-            className="cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200 border-2 border-transparent hover:border-blue-300"
-            onClick={() => navigate(`/lesson/new?child=${child.id}`)}
-          >
-            <CardContent className="flex flex-col items-center py-8 px-6">
-              <span className="text-6xl mb-4">{child.avatar_emoji}</span>
-              <h2 className="text-xl font-bold text-gray-800">{child.name}</h2>
-              <p className="text-gray-500 mt-1">{child.age} anos</p>
-              {child.total_stars !== undefined && child.total_stars > 0 && (
-                <p className="text-yellow-500 mt-2 text-sm">
-                  {child.total_stars} estrelas
-                </p>
+        {children.map((child) => {
+          const dueCount = dueCounts[child.id] ?? 0;
+          return (
+            <div key={child.id} className="flex flex-col gap-2">
+              <Card
+                className="cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200 border-2 border-transparent hover:border-blue-300"
+                onClick={() => navigate(`/lesson/new?child=${child.id}`)}
+              >
+                <CardContent className="flex flex-col items-center py-8 px-6">
+                  <span className="text-6xl mb-4">{child.avatar_emoji}</span>
+                  <h2 className="text-xl font-bold text-gray-800">{child.name}</h2>
+                  <p className="text-gray-500 mt-1">{child.age} anos</p>
+                  {child.total_stars !== undefined && child.total_stars > 0 && (
+                    <p className="text-yellow-500 mt-2 text-sm">
+                      {child.total_stars} estrelas
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+              {dueCount > 0 && (
+                <Button
+                  variant="outline"
+                  className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                  onClick={() => navigate(`/lesson/review-due?child=${child.id}`)}
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Revisao do dia ({dueCount})
+                </Button>
               )}
-            </CardContent>
-          </Card>
-        ))}
+            </div>
+          );
+        })}
       </div>
 
       <Button

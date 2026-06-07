@@ -97,4 +97,49 @@ export const api = {
     request<import("../types").SessionDetail>(`/api/parents/sessions/${sessionId}`, {
       headers: { ...authHeaders() },
     }),
+
+  getDue: (childId: number, limit = 10) =>
+    request<import("../types").DueResponse>(`/api/children/${childId}/due?limit=${limit}`),
+
+  answerReviewItem: (itemId: number, selectedOption: number) =>
+    request<import("../types").ReviewAnswerResponse>(`/api/review-items/${itemId}/answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selected_option: selectedOption }),
+    }),
+
+  getPending: () =>
+    request<{ pending: import("../types").PendingLesson[] }>("/api/parents/pending", {
+      headers: { ...authHeaders() },
+    }),
+
+  getLessonDraft: (sessionId: number) =>
+    request<import("../types").DraftLesson>(`/api/parents/sessions/${sessionId}/lesson-draft`, {
+      headers: { ...authHeaders() },
+    }),
+
+  editLesson: (sessionId: number, lesson: import("../types").Lesson) =>
+    request<{ success: boolean; edited: boolean }>(`/api/parents/sessions/${sessionId}/lesson`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ lesson }),
+    }),
+
+  approveLesson: (sessionId: number) =>
+    request<{ success: boolean; already_approved?: boolean }>(
+      `/api/parents/sessions/${sessionId}/approve`,
+      { method: "POST", headers: { ...authHeaders() } },
+    ),
+
+  getSettings: () =>
+    request<import("../types").ParentSettings>("/api/parents/settings", {
+      headers: { ...authHeaders() },
+    }),
+
+  updateSettings: (autoApprove: boolean) =>
+    request<{ success: boolean; auto_approve: boolean }>("/api/parents/settings", {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ auto_approve: autoApprove }),
+    }),
 };

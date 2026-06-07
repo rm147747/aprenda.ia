@@ -18,6 +18,7 @@ from app.routes_auth import router as auth_router
 from app.routes_children import router as children_router
 from app.routes_sessions import router as sessions_router
 from app.routes_parents import router as parents_router
+from app.routes_review import router as review_router
 
 
 @asynccontextmanager
@@ -41,6 +42,7 @@ app.include_router(auth_router)
 app.include_router(children_router)
 app.include_router(sessions_router)
 app.include_router(parents_router)
+app.include_router(review_router)
 
 
 @app.get("/healthz")

@@ -8,7 +8,7 @@ import { api } from "@/api/client";
 import AudioRecorder from "@/components/AudioRecorder";
 import type { Child } from "@/types";
 
-const MAX_FILES = 10;
+const MAX_FILES = 20;
 
 export default function TopicInput() {
   const [searchParams] = useSearchParams();

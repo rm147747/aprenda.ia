@@ -71,6 +71,56 @@ def init_db():
         );
     """)
 
+    # B1: approval gate columns (idempotent migration)
+    def _add_col(table: str, col_def: str):
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
+
+    # Detect the one moment when approval_status doesn't yet exist — that's the migration boundary.
+    # SQLite's ADD COLUMN with DEFAULT 'draft' would otherwise lock pre-existing history behind the gate.
+    sessions_cols = {r[1] for r in cursor.execute("PRAGMA table_info(sessions)").fetchall()}
+    is_gate_migration = "approval_status" not in sessions_cols
+
+    _add_col("sessions", "approval_status TEXT DEFAULT 'draft'")
+    _add_col("sessions", "approved_by TEXT")
+    _add_col("sessions", "approved_at TIMESTAMP")
+    _add_col("sessions", "lesson_edited INTEGER DEFAULT 0")
+    _add_col("settings", "auto_approve INTEGER DEFAULT 0")
+
+    if is_gate_migration:
+        cursor.execute(
+            "UPDATE sessions SET approval_status='approved' "
+            "WHERE status IN ('completed', 'ready', 'error')"
+        )
+
+    # A1: Leitner spaced-repetition queue
+    cursor.executescript("""
+        CREATE TABLE IF NOT EXISTS review_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            child_id INTEGER NOT NULL,
+            source_session_id INTEGER,
+            concept_key TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            options_json TEXT NOT NULL,
+            correct_option INTEGER NOT NULL,
+            hint TEXT,
+            box INTEGER NOT NULL DEFAULT 0,
+            next_review_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_result TEXT,
+            lapses INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP,
+            UNIQUE(child_id, concept_key),
+            FOREIGN KEY (child_id) REFERENCES children(id),
+            FOREIGN KEY (source_session_id) REFERENCES sessions(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_review_items_due
+            ON review_items(child_id, next_review_at);
+    """)
+
     # Seed children if empty
     cursor.execute("SELECT COUNT(*) FROM children")
     if cursor.fetchone()[0] == 0:

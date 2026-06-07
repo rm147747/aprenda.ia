@@ -10,6 +10,7 @@ from app.config import UPLOAD_DIR, ALLOWED_EXTENSIONS, MAX_FILE_SIZE, AUDIO_EXTE
 from app.database import get_db
 from app.extraction import extract_content
 from app.ai_service import generate_lesson, generate_review, generate_parent_summary
+from app.review_engine import upsert_quiz_items, apply_session_answer
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -130,10 +131,24 @@ async def create_session(
         lesson_json = json.dumps(lesson, ensure_ascii=False)
 
         with get_db() as conn:
-            conn.execute(
-                "UPDATE sessions SET lesson_json = ?, status = 'ready' WHERE id = ?",
-                (lesson_json, session_id),
-            )
+            auto = conn.execute("SELECT auto_approve FROM settings LIMIT 1").fetchone()
+            auto_approve = bool(auto and auto["auto_approve"])
+            if auto_approve:
+                conn.execute(
+                    "UPDATE sessions SET lesson_json=?, status='ready', "
+                    "approval_status='approved', approved_by='parent', "
+                    "approved_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (lesson_json, session_id),
+                )
+                # Final lesson → seed Leitner queue now
+                upsert_quiz_items(conn, child_id, session_id, lesson.get("quiz", []))
+            else:
+                conn.execute(
+                    "UPDATE sessions SET lesson_json=?, status='ready', "
+                    "approval_status='draft' WHERE id=?",
+                    (lesson_json, session_id),
+                )
+                # Defer seeding to the parent approve endpoint — edits may change quiz
             conn.commit()
     except Exception as e:
         with get_db() as conn:
@@ -152,7 +167,7 @@ async def get_lesson(session_id: int):
     """Get the generated lesson for a session."""
     with get_db() as conn:
         session = conn.execute(
-            "SELECT id, status, lesson_json, topic FROM sessions WHERE id = ?",
+            "SELECT id, status, lesson_json, topic, approval_status FROM sessions WHERE id = ?",
             (session_id,),
         ).fetchone()
 
@@ -164,6 +179,15 @@ async def get_lesson(session_id: int):
 
     if session["status"] == "error":
         return {"session_id": session_id, "status": "error", "lesson": None}
+
+    # B3: hide drafts from the child — frontend renders a friendly waiting screen
+    if (session["approval_status"] or "draft") != "approved":
+        return {
+            "session_id": session_id,
+            "status": "awaiting_approval",
+            "topic": session["topic"],
+            "lesson": None,
+        }
 
     lesson = json.loads(session["lesson_json"]) if session["lesson_json"] else None
     return {
@@ -179,11 +203,16 @@ async def submit_quiz_response(session_id: int, req: QuizResponseRequest):
     """Submit a single quiz response."""
     with get_db() as conn:
         session = conn.execute(
-            "SELECT lesson_json FROM sessions WHERE id = ?", (session_id,)
+            "SELECT lesson_json, child_id, approval_status FROM sessions WHERE id = ?",
+            (session_id,),
         ).fetchone()
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    # B3: 403 hard — closes the loophole if approval is revoked mid-session
+    if (session["approval_status"] or "draft") != "approved":
+        raise HTTPException(status_code=403, detail="Lesson awaiting parent approval")
 
     lesson = json.loads(session["lesson_json"])
     quiz = lesson.get("quiz", [])
@@ -202,6 +231,7 @@ async def submit_quiz_response(session_id: int, req: QuizResponseRequest):
                WHERE session_id = ? AND question_index = ?""",
             (session_id, req.question_index),
         ).fetchone()
+        attempt_number = existing["count"] + 1
 
         conn.execute(
             """INSERT INTO quiz_responses
@@ -214,8 +244,12 @@ async def submit_quiz_response(session_id: int, req: QuizResponseRequest):
                 question["correct"],
                 req.selected_option,
                 is_correct,
-                existing["count"] + 1,
+                attempt_number,
             ),
+        )
+        # A3: schedule next review in the Leitner queue (1st attempt only)
+        apply_session_answer(
+            conn, session["child_id"], question["question"], is_correct, attempt_number
         )
         conn.commit()
 

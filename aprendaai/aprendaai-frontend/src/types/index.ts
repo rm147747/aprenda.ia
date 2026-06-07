@@ -89,6 +89,58 @@ export interface DashboardData {
   weekly_chart: Record<string, string | number>[];
 }
 
+export interface ReviewItem {
+  id: number;
+  prompt: string;
+  options: string[];
+  correct_option: number;
+  hint?: string | null;
+  box: number;
+}
+
+export interface DueResponse {
+  items: ReviewItem[];
+  count_due: number;
+}
+
+export interface ReviewAnswerResponse {
+  is_correct: boolean;
+  correct_option: number;
+  box: number;
+  next_review_at: string;
+}
+
+export interface PendingLesson {
+  session_id: number;
+  child_id: number;
+  child_name: string;
+  avatar_emoji: string;
+  topic: string;
+  started_at: string;
+  edited: boolean;
+  title: string;
+  quiz_count: number;
+  block_count: number;
+}
+
+export interface DraftLesson {
+  session_id: number;
+  child_id: number;
+  child_name: string;
+  child_age: number;
+  avatar_emoji: string;
+  topic: string;
+  status: string;
+  approval_status: string;
+  approved_at: string | null;
+  edited: boolean;
+  lesson: Lesson | null;
+}
+
+export interface ParentSettings {
+  auto_approve: boolean;
+}
+
 export interface SessionDetail {
   id: number;
   child_name: string;

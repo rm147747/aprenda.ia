@@ -17,17 +17,33 @@ export default function Quiz() {
   const [results, setResults] = useState<QuizResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [awaitingApproval, setAwaitingApproval] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!sessionId) { navigate("/"); return; }
     api.getLesson(sessionId).then((data) => {
-      if (data.lesson) {
+      if (data.status === "awaiting_approval") {
+        setAwaitingApproval(true);
+      } else if (data.lesson) {
         setLesson(data.lesson);
       }
       setLoading(false);
     });
   }, [sessionId, navigate]);
+
+  if (awaitingApproval) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-purple-50 to-blue-50 flex flex-col items-center justify-center p-6">
+        <div className="text-center max-w-md">
+          <span className="text-6xl mb-4 block">👨‍🏫</span>
+          <h2 className="text-2xl font-bold text-gray-700 mb-2">Tua aula esta sendo preparada</h2>
+          <p className="text-gray-500 mb-6">Seu pai ou sua mae esta dando uma olhadinha rapida antes.</p>
+          <Button variant="outline" onClick={() => navigate("/")}>Voltar ao Inicio</Button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading || !lesson) {
     return (
