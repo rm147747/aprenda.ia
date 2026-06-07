@@ -140,14 +140,15 @@ async def create_session(
                     "approved_at=CURRENT_TIMESTAMP WHERE id=?",
                     (lesson_json, session_id),
                 )
+                # Final lesson → seed Leitner queue now
+                upsert_quiz_items(conn, child_id, session_id, lesson.get("quiz", []))
             else:
                 conn.execute(
                     "UPDATE sessions SET lesson_json=?, status='ready', "
                     "approval_status='draft' WHERE id=?",
                     (lesson_json, session_id),
                 )
-            # A2: seed Leitner queue with this lesson's quiz items
-            upsert_quiz_items(conn, child_id, session_id, lesson.get("quiz", []))
+                # Defer seeding to the parent approve endpoint — edits may change quiz
             conn.commit()
     except Exception as e:
         with get_db() as conn:

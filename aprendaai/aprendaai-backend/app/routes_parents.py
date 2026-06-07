@@ -7,6 +7,7 @@ from jose import jwt
 
 from app.config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRE_MINUTES
 from app.database import get_db
+from app.review_engine import upsert_quiz_items
 
 router = APIRouter(prefix="/api/parents", tags=["parents"])
 
@@ -19,6 +20,34 @@ class LoginRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
+
+
+class EditLessonRequest(BaseModel):
+    lesson: dict
+
+
+class SettingsUpdateRequest(BaseModel):
+    auto_approve: bool
+
+
+def _validate_lesson_payload(lesson: dict) -> None:
+    if not isinstance(lesson, dict):
+        raise HTTPException(status_code=400, detail="Lesson must be an object")
+    if not isinstance(lesson.get("title"), str) or not lesson["title"].strip():
+        raise HTTPException(status_code=400, detail="lesson.title required")
+    if not isinstance(lesson.get("blocks"), list):
+        raise HTTPException(status_code=400, detail="lesson.blocks must be a list")
+    if not isinstance(lesson.get("quiz"), list):
+        raise HTTPException(status_code=400, detail="lesson.quiz must be a list")
+    for i, q in enumerate(lesson["quiz"]):
+        if not isinstance(q, dict):
+            raise HTTPException(status_code=400, detail=f"quiz[{i}] must be object")
+        if not isinstance(q.get("question"), str) or not q["question"].strip():
+            raise HTTPException(status_code=400, detail=f"quiz[{i}].question required")
+        if not isinstance(q.get("options"), list) or len(q["options"]) < 2:
+            raise HTTPException(status_code=400, detail=f"quiz[{i}].options needs >=2")
+        if not isinstance(q.get("correct"), int) or not (0 <= q["correct"] < len(q["options"])):
+            raise HTTPException(status_code=400, detail=f"quiz[{i}].correct out of range")
 
 
 def verify_token(request: Request):
@@ -229,6 +258,140 @@ async def session_detail(session_id: int, _=Depends(verify_token)):
             for r in responses
         ],
     }
+
+
+@router.get("/pending")
+async def list_pending(_=Depends(verify_token)):
+    """B4: lessons awaiting parent approval."""
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT s.id, s.child_id, s.topic, s.started_at, s.lesson_json,
+                      s.lesson_edited, c.name AS child_name, c.avatar_emoji
+               FROM sessions s JOIN children c ON s.child_id = c.id
+               WHERE s.approval_status='draft' AND s.status='ready'
+                     AND s.lesson_json IS NOT NULL
+               ORDER BY s.started_at DESC"""
+        ).fetchall()
+
+    pending = []
+    for r in rows:
+        try:
+            lesson = json.loads(r["lesson_json"])
+        except (json.JSONDecodeError, TypeError):
+            lesson = None
+        pending.append({
+            "session_id": r["id"],
+            "child_id": r["child_id"],
+            "child_name": r["child_name"],
+            "avatar_emoji": r["avatar_emoji"],
+            "topic": r["topic"],
+            "started_at": r["started_at"],
+            "edited": bool(r["lesson_edited"]),
+            "title": (lesson or {}).get("title", r["topic"]),
+            "quiz_count": len((lesson or {}).get("quiz", []) or []),
+            "block_count": len((lesson or {}).get("blocks", []) or []),
+        })
+    return {"pending": pending}
+
+
+@router.get("/sessions/{session_id}/lesson-draft")
+async def get_lesson_draft(session_id: int, _=Depends(verify_token)):
+    """B4: full lesson JSON for the editor view (works on any approval state)."""
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT s.id, s.child_id, s.topic, s.status, s.approval_status,
+                      s.lesson_json, s.lesson_edited, s.approved_at,
+                      c.name AS child_name, c.age AS child_age, c.avatar_emoji
+               FROM sessions s JOIN children c ON s.child_id = c.id
+               WHERE s.id = ?""",
+            (session_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Session not found")
+    lesson = json.loads(row["lesson_json"]) if row["lesson_json"] else None
+    return {
+        "session_id": row["id"],
+        "child_id": row["child_id"],
+        "child_name": row["child_name"],
+        "child_age": row["child_age"],
+        "avatar_emoji": row["avatar_emoji"],
+        "topic": row["topic"],
+        "status": row["status"],
+        "approval_status": row["approval_status"],
+        "approved_at": row["approved_at"],
+        "edited": bool(row["lesson_edited"]),
+        "lesson": lesson,
+    }
+
+
+@router.patch("/sessions/{session_id}/lesson")
+async def edit_lesson(session_id: int, req: EditLessonRequest, _=Depends(verify_token)):
+    """B4: parent edits the lesson before approval."""
+    _validate_lesson_payload(req.lesson)
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id, approval_status FROM sessions WHERE id=?", (session_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Session not found")
+        conn.execute(
+            "UPDATE sessions SET lesson_json=?, lesson_edited=1 WHERE id=?",
+            (json.dumps(req.lesson, ensure_ascii=False), session_id),
+        )
+        conn.commit()
+    return {"success": True, "edited": True}
+
+
+@router.post("/sessions/{session_id}/approve")
+async def approve_lesson(session_id: int, _=Depends(verify_token)):
+    """B4: approve a draft lesson and seed its quiz into the Leitner queue."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id, child_id, lesson_json, approval_status FROM sessions WHERE id=?",
+            (session_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Session not found")
+        if row["approval_status"] == "approved":
+            return {"success": True, "already_approved": True}
+        if not row["lesson_json"]:
+            raise HTTPException(status_code=400, detail="Lesson not generated yet")
+        try:
+            lesson = json.loads(row["lesson_json"])
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=500, detail="Stored lesson is malformed")
+
+        conn.execute(
+            "UPDATE sessions SET approval_status='approved', approved_by='parent', "
+            "approved_at=CURRENT_TIMESTAMP WHERE id=?",
+            (session_id,),
+        )
+        upsert_quiz_items(conn, row["child_id"], session_id, lesson.get("quiz", []))
+        conn.commit()
+    return {"success": True}
+
+
+@router.get("/settings")
+async def get_settings(_=Depends(verify_token)):
+    """B4: read parent-facing settings (auto_approve toggle)."""
+    with get_db() as conn:
+        row = conn.execute("SELECT auto_approve FROM settings LIMIT 1").fetchone()
+    return {"auto_approve": bool(row and row["auto_approve"])}
+
+
+@router.patch("/settings")
+async def update_settings(req: SettingsUpdateRequest, _=Depends(verify_token)):
+    """B4: toggle auto_approve."""
+    with get_db() as conn:
+        row = conn.execute("SELECT id FROM settings LIMIT 1").fetchone()
+        if not row:
+            raise HTTPException(status_code=500, detail="Settings row missing")
+        conn.execute(
+            "UPDATE settings SET auto_approve=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            (1 if req.auto_approve else 0, row["id"]),
+        )
+        conn.commit()
+    return {"success": True, "auto_approve": req.auto_approve}
 
 
 @router.post("/change-password")
