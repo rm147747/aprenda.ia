@@ -10,6 +10,7 @@ from app.config import UPLOAD_DIR, ALLOWED_EXTENSIONS, MAX_FILE_SIZE, AUDIO_EXTE
 from app.database import get_db
 from app.extraction import extract_content
 from app.ai_service import generate_lesson, generate_review, generate_parent_summary
+from app.review_engine import upsert_quiz_items
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -145,6 +146,8 @@ async def create_session(
                     "approval_status='draft' WHERE id=?",
                     (lesson_json, session_id),
                 )
+            # A2: seed Leitner queue with this lesson's quiz items
+            upsert_quiz_items(conn, child_id, session_id, lesson.get("quiz", []))
             conn.commit()
     except Exception as e:
         with get_db() as conn:
