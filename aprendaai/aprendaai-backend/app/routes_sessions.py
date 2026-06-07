@@ -10,7 +10,7 @@ from app.config import UPLOAD_DIR, ALLOWED_EXTENSIONS, MAX_FILE_SIZE, AUDIO_EXTE
 from app.database import get_db
 from app.extraction import extract_content
 from app.ai_service import generate_lesson, generate_review, generate_parent_summary
-from app.review_engine import upsert_quiz_items
+from app.review_engine import upsert_quiz_items, apply_session_answer
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -193,7 +193,7 @@ async def submit_quiz_response(session_id: int, req: QuizResponseRequest):
     """Submit a single quiz response."""
     with get_db() as conn:
         session = conn.execute(
-            "SELECT lesson_json FROM sessions WHERE id = ?", (session_id,)
+            "SELECT lesson_json, child_id FROM sessions WHERE id = ?", (session_id,)
         ).fetchone()
 
     if not session:
@@ -216,6 +216,7 @@ async def submit_quiz_response(session_id: int, req: QuizResponseRequest):
                WHERE session_id = ? AND question_index = ?""",
             (session_id, req.question_index),
         ).fetchone()
+        attempt_number = existing["count"] + 1
 
         conn.execute(
             """INSERT INTO quiz_responses
@@ -228,8 +229,12 @@ async def submit_quiz_response(session_id: int, req: QuizResponseRequest):
                 question["correct"],
                 req.selected_option,
                 is_correct,
-                existing["count"] + 1,
+                attempt_number,
             ),
+        )
+        # A3: schedule next review in the Leitner queue (1st attempt only)
+        apply_session_answer(
+            conn, session["child_id"], question["question"], is_correct, attempt_number
         )
         conn.commit()
 

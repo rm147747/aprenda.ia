@@ -23,6 +23,51 @@ def concept_key(child_id: int, question_text: str) -> str:
     return digest.hexdigest()
 
 
+def _schedule_correct(conn, item_id: int, current_box: int) -> tuple[int, str]:
+    new_box = min(current_box + 1, MAX_BOX)
+    interval = f"+{BOX_INTERVALS_DAYS[new_box]} days"
+    conn.execute(
+        "UPDATE review_items SET box=?, next_review_at=datetime('now', ?), "
+        "last_result='correct', updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        (new_box, interval, item_id),
+    )
+    return new_box, interval
+
+
+def _schedule_wrong(conn, item_id: int) -> None:
+    conn.execute(
+        "UPDATE review_items SET box=0, lapses=lapses+1, "
+        "next_review_at=CURRENT_TIMESTAMP, last_result='wrong', "
+        "updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        (item_id,),
+    )
+
+
+def apply_session_answer(
+    conn, child_id: int, question_text: str, is_correct: bool, attempt_number: int = 1
+) -> bool:
+    """Move the matching review_item up or down a box.
+
+    Only the first attempt of a question within a session updates the schedule —
+    retries inside the same exposure would otherwise reinforce/reset the box
+    on the same immediate practice.
+    """
+    if attempt_number != 1:
+        return False
+    ck = concept_key(child_id, question_text)
+    row = conn.execute(
+        "SELECT id, box FROM review_items WHERE child_id=? AND concept_key=?",
+        (child_id, ck),
+    ).fetchone()
+    if not row:
+        return False
+    if is_correct:
+        _schedule_correct(conn, row["id"], row["box"])
+    else:
+        _schedule_wrong(conn, row["id"])
+    return True
+
+
 def upsert_quiz_items(conn, child_id: int, session_id: int, quiz: list[dict]) -> int:
     """Insert quiz questions into review_items, ignoring duplicates.
 
