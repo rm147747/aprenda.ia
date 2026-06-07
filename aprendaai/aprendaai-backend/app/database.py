@@ -96,6 +96,31 @@ def init_db():
             "WHERE status IN ('completed', 'ready', 'error')"
         )
 
+    # A1: Leitner spaced-repetition queue
+    cursor.executescript("""
+        CREATE TABLE IF NOT EXISTS review_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            child_id INTEGER NOT NULL,
+            source_session_id INTEGER,
+            concept_key TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            options_json TEXT NOT NULL,
+            correct_option INTEGER NOT NULL,
+            hint TEXT,
+            box INTEGER NOT NULL DEFAULT 0,
+            next_review_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_result TEXT,
+            lapses INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP,
+            UNIQUE(child_id, concept_key),
+            FOREIGN KEY (child_id) REFERENCES children(id),
+            FOREIGN KEY (source_session_id) REFERENCES sessions(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_review_items_due
+            ON review_items(child_id, next_review_at);
+    """)
+
     # Seed children if empty
     cursor.execute("SELECT COUNT(*) FROM children")
     if cursor.fetchone()[0] == 0:
