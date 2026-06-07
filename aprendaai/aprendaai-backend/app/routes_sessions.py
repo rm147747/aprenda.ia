@@ -130,10 +130,21 @@ async def create_session(
         lesson_json = json.dumps(lesson, ensure_ascii=False)
 
         with get_db() as conn:
-            conn.execute(
-                "UPDATE sessions SET lesson_json = ?, status = 'ready' WHERE id = ?",
-                (lesson_json, session_id),
-            )
+            auto = conn.execute("SELECT auto_approve FROM settings LIMIT 1").fetchone()
+            auto_approve = bool(auto and auto["auto_approve"])
+            if auto_approve:
+                conn.execute(
+                    "UPDATE sessions SET lesson_json=?, status='ready', "
+                    "approval_status='approved', approved_by='parent', "
+                    "approved_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (lesson_json, session_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE sessions SET lesson_json=?, status='ready', "
+                    "approval_status='draft' WHERE id=?",
+                    (lesson_json, session_id),
+                )
             conn.commit()
     except Exception as e:
         with get_db() as conn:
