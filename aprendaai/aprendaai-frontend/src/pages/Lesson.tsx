@@ -17,6 +17,7 @@ export default function Lesson() {
   const [isCorrect, setIsCorrect] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [awaitingApproval, setAwaitingApproval] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -28,7 +29,13 @@ export default function Lesson() {
       api.getLesson(sessionId).then((data) => {
         if (data.status === "processing") {
           setTimeout(fetchLesson, 2000);
+        } else if (data.status === "awaiting_approval") {
+          setAwaitingApproval(true);
+          setLoading(false);
+          // Poll while parent reviews
+          setTimeout(fetchLesson, 5000);
         } else if (data.status === "ready" && data.lesson) {
+          setAwaitingApproval(false);
           setLesson(data.lesson);
           setLoading(false);
         } else {
@@ -52,6 +59,28 @@ export default function Lesson() {
             Preparando sua aula...
           </h2>
           <p className="text-gray-500">A IA esta criando algo especial para voce!</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (awaitingApproval) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-purple-50 to-blue-50 flex flex-col items-center justify-center p-6">
+        <div className="text-center max-w-md">
+          <span className="text-6xl mb-4 block">👨‍🏫</span>
+          <h2 className="text-2xl font-bold text-gray-700 mb-2">
+            Tua aula esta sendo preparada
+          </h2>
+          <p className="text-gray-500 mb-6">
+            Seu pai ou sua mae esta dando uma olhadinha rapida antes. Ja, ja te chamamos!
+          </p>
+          <Button
+            variant="outline"
+            onClick={() => navigate("/")}
+          >
+            Voltar ao Inicio
+          </Button>
         </div>
       </div>
     );

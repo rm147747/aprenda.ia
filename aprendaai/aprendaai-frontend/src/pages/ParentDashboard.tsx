@@ -3,13 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Clock, Star, BookOpen, AlertTriangle, LogOut } from "lucide-react";
+import { ArrowLeft, Clock, Star, BookOpen, AlertTriangle, LogOut, Bell, Shield } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { api } from "@/api/client";
-import type { DashboardData } from "@/types";
+import type { DashboardData, PendingLesson } from "@/types";
 
 export default function ParentDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [pending, setPending] = useState<PendingLesson[]>([]);
+  const [autoApprove, setAutoApprove] = useState(false);
+  const [togglingAuto, setTogglingAuto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedChild, setSelectedChild] = useState<number | null>(null);
   const navigate = useNavigate();
@@ -20,8 +23,14 @@ export default function ParentDashboard() {
       navigate("/parents/login");
       return;
     }
-    api.getDashboard().then((d) => {
+    Promise.all([
+      api.getDashboard(),
+      api.getPending().catch(() => ({ pending: [] })),
+      api.getSettings().catch(() => ({ auto_approve: false })),
+    ]).then(([d, p, s]) => {
       setData(d);
+      setPending(p.pending);
+      setAutoApprove(s.auto_approve);
       if (d.children.length > 0) setSelectedChild(d.children[0].id);
       setLoading(false);
     }).catch(() => {
@@ -29,6 +38,17 @@ export default function ParentDashboard() {
       navigate("/parents/login");
     });
   }, [navigate]);
+
+  const handleToggleAuto = async () => {
+    setTogglingAuto(true);
+    try {
+      const res = await api.updateSettings(!autoApprove);
+      setAutoApprove(res.auto_approve);
+    } catch {
+      // swallow — leave toggle as-is
+    }
+    setTogglingAuto(false);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("parent_token");
@@ -59,6 +79,71 @@ export default function ParentDashboard() {
             <LogOut className="w-4 h-4 mr-1" /> Sair
           </Button>
         </div>
+
+        {/* B5: Pending lessons section */}
+        {pending.length > 0 && (
+          <Card className="mb-6 border-l-4 border-l-orange-400">
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Bell className="w-4 h-4 text-orange-500" />
+                <h3 className="font-medium text-gray-700">
+                  Aulas pendentes ({pending.length})
+                </h3>
+              </div>
+              <div className="space-y-2">
+                {pending.map((p) => (
+                  <div
+                    key={p.session_id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-orange-50 hover:bg-orange-100 cursor-pointer transition-colors"
+                    onClick={() => navigate(`/parents/review/${p.session_id}`)}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-800 text-sm truncate">
+                        {p.avatar_emoji} {p.child_name} • {p.title}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(p.started_at).toLocaleDateString("pt-BR")} • {p.quiz_count} questoes
+                        {p.edited && " • editada"}
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="bg-orange-200 text-orange-800 shrink-0 ml-2">
+                      Revisar
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* B5: auto_approve toggle */}
+        <Card className="mb-6">
+          <CardContent className="pt-4 flex items-start gap-3">
+            <Shield className={`w-5 h-5 mt-0.5 ${autoApprove ? "text-gray-400" : "text-green-500"}`} />
+            <div className="flex-1">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-medium text-gray-800 text-sm">
+                    Aprovar aulas automaticamente
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {autoApprove
+                      ? "Ligado: as criancas veem a aula assim que a IA termina."
+                      : "Desligado: voce revisa cada aula antes da crianca ver."}
+                  </p>
+                </div>
+                <Button
+                  variant={autoApprove ? "outline" : "default"}
+                  size="sm"
+                  onClick={handleToggleAuto}
+                  disabled={togglingAuto}
+                >
+                  {autoApprove ? "Desligar" : "Ligar"}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Child selector */}
         <div className="flex gap-3 mb-6 overflow-x-auto pb-2">
