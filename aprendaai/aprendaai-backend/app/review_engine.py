@@ -69,6 +69,34 @@ def apply_session_answer(
     return True
 
 
+def answer_item(conn, item_id: int, selected_option: int) -> dict | None:
+    """Apply Leitner scheduling to a single answer outside of a session.
+
+    Looks up the item by id, computes correctness against its stored
+    correct_option, and advances or resets the box. Returns the new state.
+    """
+    row = conn.execute(
+        "SELECT id, box, correct_option FROM review_items WHERE id=?",
+        (item_id,),
+    ).fetchone()
+    if not row:
+        return None
+    is_correct = int(selected_option) == int(row["correct_option"])
+    if is_correct:
+        _schedule_correct(conn, row["id"], row["box"])
+    else:
+        _schedule_wrong(conn, row["id"])
+    updated = conn.execute(
+        "SELECT box, next_review_at FROM review_items WHERE id=?", (item_id,)
+    ).fetchone()
+    return {
+        "is_correct": is_correct,
+        "correct_option": row["correct_option"],
+        "box": updated["box"],
+        "next_review_at": updated["next_review_at"],
+    }
+
+
 def due_items(conn, child_id: int, limit: int = 10) -> list[dict]:
     """Return up to `limit` items due now for this child, lightly interleaved.
 
