@@ -6,6 +6,7 @@ immediately.
 """
 import hashlib
 import json
+import random
 import re
 
 # Days until next review per box.
@@ -66,6 +67,36 @@ def apply_session_answer(
     else:
         _schedule_wrong(conn, row["id"])
     return True
+
+
+def due_items(conn, child_id: int, limit: int = 10) -> list[dict]:
+    """Return up to `limit` items due now for this child, lightly interleaved.
+
+    Pulls the 2*limit oldest-due rows, shuffles, then slices to `limit`. That
+    keeps the oldest items in play while avoiding back-to-back questions on
+    the same recent concept.
+    """
+    rows = conn.execute(
+        "SELECT id, prompt, options_json, correct_option, hint, box "
+        "FROM review_items WHERE child_id=? AND next_review_at <= datetime('now') "
+        "ORDER BY next_review_at ASC LIMIT ?",
+        (child_id, max(1, limit) * 2),
+    ).fetchall()
+    items = [dict(r) for r in rows]
+    random.shuffle(items)
+    items = items[:limit]
+    for it in items:
+        it["options"] = json.loads(it.pop("options_json"))
+    return items
+
+
+def due_count(conn, child_id: int) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) AS c FROM review_items "
+        "WHERE child_id=? AND next_review_at <= datetime('now')",
+        (child_id,),
+    ).fetchone()
+    return row["c"] if row else 0
 
 
 def upsert_quiz_items(conn, child_id: int, session_id: int, quiz: list[dict]) -> int:
