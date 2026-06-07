@@ -71,6 +71,31 @@ def init_db():
         );
     """)
 
+    # B1: approval gate columns (idempotent migration)
+    def _add_col(table: str, col_def: str):
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
+
+    # Detect the one moment when approval_status doesn't yet exist — that's the migration boundary.
+    # SQLite's ADD COLUMN with DEFAULT 'draft' would otherwise lock pre-existing history behind the gate.
+    sessions_cols = {r[1] for r in cursor.execute("PRAGMA table_info(sessions)").fetchall()}
+    is_gate_migration = "approval_status" not in sessions_cols
+
+    _add_col("sessions", "approval_status TEXT DEFAULT 'draft'")
+    _add_col("sessions", "approved_by TEXT")
+    _add_col("sessions", "approved_at TIMESTAMP")
+    _add_col("sessions", "lesson_edited INTEGER DEFAULT 0")
+    _add_col("settings", "auto_approve INTEGER DEFAULT 0")
+
+    if is_gate_migration:
+        cursor.execute(
+            "UPDATE sessions SET approval_status='approved' "
+            "WHERE status IN ('completed', 'ready', 'error')"
+        )
+
     # Seed children if empty
     cursor.execute("SELECT COUNT(*) FROM children")
     if cursor.fetchone()[0] == 0:
