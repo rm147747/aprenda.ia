@@ -166,7 +166,7 @@ async def get_lesson(session_id: int):
     """Get the generated lesson for a session."""
     with get_db() as conn:
         session = conn.execute(
-            "SELECT id, status, lesson_json, topic FROM sessions WHERE id = ?",
+            "SELECT id, status, lesson_json, topic, approval_status FROM sessions WHERE id = ?",
             (session_id,),
         ).fetchone()
 
@@ -178,6 +178,15 @@ async def get_lesson(session_id: int):
 
     if session["status"] == "error":
         return {"session_id": session_id, "status": "error", "lesson": None}
+
+    # B3: hide drafts from the child — frontend renders a friendly waiting screen
+    if (session["approval_status"] or "draft") != "approved":
+        return {
+            "session_id": session_id,
+            "status": "awaiting_approval",
+            "topic": session["topic"],
+            "lesson": None,
+        }
 
     lesson = json.loads(session["lesson_json"]) if session["lesson_json"] else None
     return {
@@ -193,11 +202,16 @@ async def submit_quiz_response(session_id: int, req: QuizResponseRequest):
     """Submit a single quiz response."""
     with get_db() as conn:
         session = conn.execute(
-            "SELECT lesson_json, child_id FROM sessions WHERE id = ?", (session_id,)
+            "SELECT lesson_json, child_id, approval_status FROM sessions WHERE id = ?",
+            (session_id,),
         ).fetchone()
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    # B3: 403 hard — closes the loophole if approval is revoked mid-session
+    if (session["approval_status"] or "draft") != "approved":
+        raise HTTPException(status_code=403, detail="Lesson awaiting parent approval")
 
     lesson = json.loads(session["lesson_json"])
     quiz = lesson.get("quiz", [])
