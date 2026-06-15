@@ -1,0 +1,43 @@
+# Deploys aprenda.ia to the Hetzner VM on every push to main.
+#
+# Required setup on GitHub (one-time):
+#   Settings -> Secrets and variables -> Actions -> Secrets
+#     HETZNER_SSH_KEY   private key (RSA/ED25519) whose public key is in
+#                       root@157.180.126.75:~/.ssh/authorized_keys
+#
+# The VM is expected to have the repo checked out at /opt/aprenda.ia/aprendaai
+# with a docker-compose.yml in that directory that defines the `aprendaai-app`
+# service.
+
+name: Deploy to Hetzner
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 157.180.126.75
+          username: root
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/aprenda.ia/aprendaai
+
+            # Pull latest main (preserves untracked files like .env, Caddyfile)
+            git fetch origin main
+            git checkout origin/main -- \
+              aprendaai-frontend/src/pages/TopicInput.tsx \
+              aprendaai-backend/app \
+              aprendaai-backend/pyproject.toml \
+              aprendaai-frontend/src
+
+            docker compose up -d --build app
+            docker image prune -f

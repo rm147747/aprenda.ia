@@ -1,0 +1,15 @@
+node_modules
+__pycache__
+*.pyc
+.venv
+venv
+.git
+.github
+**/.env
+**/.env.local
+tests
+BACKLOG.md
+CHANGELOG.md
+README.md
+proxy.py
+gateway
