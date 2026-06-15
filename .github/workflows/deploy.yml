@@ -39,5 +39,5 @@ jobs:
               aprendaai-backend/pyproject.toml \
               aprendaai-frontend/src
 
-            docker compose up -d --build aprendaai-app
+            docker compose up -d --build app
             docker image prune -f
