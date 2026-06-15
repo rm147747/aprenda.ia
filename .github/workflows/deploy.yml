@@ -1,26 +1,15 @@
-# Deploys aprenda.ia to Google Cloud Run on every push to main.
+# Deploys aprenda.ia to the Hetzner VM on every push to main.
 #
 # Required setup on GitHub (one-time):
-#   Settings -> Secrets and variables -> Actions
-#   Repository variables:
-#     GCP_PROJECT_ID       e.g. "aprendaai-prod"
-#     GCP_REGION           e.g. "us-central1" or "southamerica-east1"
-#     CLOUD_RUN_SERVICE    name of the Cloud Run service (e.g. "aprendaai")
-#     AR_REPO              Artifact Registry repo name (e.g. "aprendaai")
-#   Repository secret:
-#     GCP_SA_KEY           JSON key of a service account with these roles:
-#                            - roles/run.admin
-#                            - roles/iam.serviceAccountUser
-#                            - roles/artifactregistry.writer
+#   Settings -> Secrets and variables -> Actions -> Secrets
+#     HETZNER_SSH_KEY   private key (RSA/ED25519) whose public key is in
+#                       root@157.180.126.75:~/.ssh/authorized_keys
 #
-# Required setup on GCP (one-time):
-#   gcloud services enable run.googleapis.com artifactregistry.googleapis.com
-#   gcloud artifacts repositories create $AR_REPO \
-#     --repository-format=docker --location=$GCP_REGION
-#   # Make sure the Cloud Run service has OPENAI_API_KEY set as an env var
-#   # (Secret Manager-backed env vars are recommended for keys).
+# The VM is expected to have the repo checked out at /opt/aprenda.ia/aprendaai
+# with a docker-compose.yml in that directory that defines the `aprendaai-app`
+# service.
 
-name: Deploy to Cloud Run
+name: Deploy to Hetzner
 
 on:
   push:
@@ -30,34 +19,25 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
 
     steps:
-      - uses: actions/checkout@v4
-
-      - id: auth
-        uses: google-github-actions/auth@v2
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          host: 157.180.126.75
+          username: root
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/aprenda.ia/aprendaai
 
-      - uses: google-github-actions/setup-gcloud@v2
+            # Pull latest main (preserves untracked files like .env, Caddyfile)
+            git fetch origin main
+            git checkout origin/main -- \
+              aprendaai-frontend/src/pages/TopicInput.tsx \
+              aprendaai-backend/app \
+              aprendaai-backend/pyproject.toml \
+              aprendaai-frontend/src
 
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
-
-      - name: Build and push image
-        run: |
-          IMAGE="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO }}/${{ vars.CLOUD_RUN_SERVICE }}:${{ github.sha }}"
-          docker build -t "$IMAGE" .
-          docker push "$IMAGE"
-          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
-
-      - name: Deploy to Cloud Run
-        run: |
-          gcloud run deploy ${{ vars.CLOUD_RUN_SERVICE }} \
-            --image "$IMAGE" \
-            --region ${{ vars.GCP_REGION }} \
-            --platform managed \
-            --allow-unauthenticated \
-            --port 8080
+            docker compose up -d --build aprendaai-app
+            docker image prune -f
