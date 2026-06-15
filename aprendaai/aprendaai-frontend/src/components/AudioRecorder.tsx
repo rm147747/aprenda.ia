@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Mic, Square, Loader2 } from "lucide-react";
+import { Mic, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface AudioRecorderProps {
